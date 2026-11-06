@@ -1,0 +1,66 @@
+
+name: Vishal Jarvis Android Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-2025
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK packages
+        shell: pwsh
+        run: |
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Extract Vishal Jarvis source
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter "Vishal-Jarvis-Android-App-Source*.zip" -File | Select-Object -First 1
+          if (-not $zip) { throw "Vishal Jarvis source ZIP not found." }
+          $destination = Join-Path $env:RUNNER_TEMP "vishal-source"
+          Expand-Archive -LiteralPath $zip.FullName -DestinationPath $destination -Force
+          $project = Join-Path $destination "Vishal-Jarvis-Android-App-Source"
+          if (-not (Test-Path (Join-Path $project "package.json"))) { throw "Source project not found inside ZIP." }
+          "PROJECT_ROOT=$project" >> $env:GITHUB_ENV
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          Set-Location $env:PROJECT_ROOT
+          npm install
+
+      - name: Build Android APK
+        shell: pwsh
+        run: |
+          Set-Location $env:PROJECT_ROOT
+          pwsh -NoProfile -File scripts/build-android.ps1
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vishal-Jarvis-APK
+          path: ${{ runner.temp }}/vishal-source/Vishal-Jarvis-Android-App-Source/artifacts/android/*.apk
+          if-no-files-found: error
+          retention-days: 7
